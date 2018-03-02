@@ -1,4 +1,7 @@
-// No Quarz required version for controlling a AY-3-8910 sound chip with the Arduino
+#include <avr/io.h>
+
+// No Quartz required version for controlling a AY-3-8910 sound chip with the
+// Arduino
 // Author: Matio Klingemann http://incubator.quasimondo.com
 
 // Credits:
@@ -15,8 +18,10 @@ const int latchPin = 6;
 //Pin connected to clock pin (SH_CP) of 74HC595
 const int clockPin = 7;
 
-const int pinBC1 =  13;     
-const int pinBCDIR =  12;
+const int pinBC1 =  40;     
+const int pinBCDIR =  41;
+
+const int resetPin = 48;
 
 // 2mz clock pin
 const int freqOutputPin = 11;   // OC2A output pin for ATmega328 boards
@@ -50,26 +55,43 @@ int tp[] = {//MIDI note number
 
 void setup()
 {
-   //init pins
-    pinMode(latchPin, OUTPUT);
-    pinMode(dataPin, OUTPUT);  
-    pinMode(clockPin, OUTPUT);
+    //init pins
+    //pinMode(latchPin, OUTPUT);
+    //pinMode(dataPin, OUTPUT);  
+    //pinMode(clockPin, OUTPUT);
     pinMode(pinBC1, OUTPUT);
     pinMode(pinBCDIR, OUTPUT);        
-    pinMode(freqOutputPin, OUTPUT);
+    //pinMode(freqOutputPin, OUTPUT);
+
+    // Reset chip
+    //pinMode(resetPin, OUTPUT);
+    //digitalWrite(resetPin, LOW);
+    //delayMicroseconds(5);
+    //digitalWrite(resetPin, HIGH);
+
+    // Port A output
+    pinMode(22, OUTPUT);
+    pinMode(23, OUTPUT);
+    pinMode(24, OUTPUT);
+    pinMode(25, OUTPUT);
+    pinMode(26, OUTPUT);
+    pinMode(27, OUTPUT);
+    pinMode(28, OUTPUT);
+    pinMode(29, OUTPUT);
    
-    init2MhzClock();
-    
-    set_mix( true, true, false, false, false, true );
+    //init2MhzClock();
+    set_mix( true, true, true, false, false, false );
+    //set_mix( false, false, false, false, false, false );
     set_chA_amplitude(8,false);
     set_chB_amplitude(8,false);
     set_chC_amplitude(0,true);
+
+    note_chB(66);
 }
 
 
 void loop() {
-  set_envelope(true,true,true,true,analogRead(1));
- 
+  set_envelope(false,false,false,false,0);
   if ( random(0,6) == 0 )
   {
     set_chA_amplitude(8,false);
@@ -78,7 +100,7 @@ void loop() {
   {
      set_chA_amplitude(0,false);
   }
-  
+  /*
   if ( random(0,6) == 0 )
   {
     set_chB_amplitude(8,false);
@@ -86,9 +108,7 @@ void loop() {
   } else if ( random(0,4) == 0 )
   {
      set_chB_amplitude(0,false);
-  }
-  
- 
+  */
   if ( random(0,2) == 0 )
   {
     set_chC_amplitude(0,true);
@@ -98,7 +118,7 @@ void loop() {
     set_chC_amplitude(0,false);
   }
  
-  delay( analogRead(0));
+  delay(20);
 }
 
 
@@ -210,8 +230,8 @@ void write_data(unsigned char address, unsigned char data)
   //write address
 
   digitalWrite(latchPin, LOW);
-  // shift out the bits:
-  shiftOut(dataPin, clockPin, MSBFIRST, address);  
+  // Write the bits on PORTA
+  PORTA = address;
 
   //take the latch pin high so the LEDs will light up:
   digitalWrite(latchPin, HIGH);
@@ -223,15 +243,11 @@ void write_data(unsigned char address, unsigned char data)
   mode_write();  
 
   digitalWrite(latchPin, LOW);
-  // shift out the bits:
-  shiftOut(dataPin, clockPin, MSBFIRST, data);  
+  // Write the bits on PORTA
+  PORTA = data; 
 
   //take the latch pin high so the LEDs will light up:
   digitalWrite(latchPin, HIGH);
 
   mode_inactive();  
 }
-
-
-
-
