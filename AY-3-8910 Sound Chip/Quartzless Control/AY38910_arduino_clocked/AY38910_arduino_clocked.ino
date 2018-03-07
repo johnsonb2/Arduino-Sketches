@@ -1,4 +1,5 @@
 #include <avr/io.h>
+#include <SerialCommand.h>
 
 // No Quartz required version for controlling a AY-3-8910 sound chip with the
 // Arduino
@@ -10,6 +11,8 @@
 // (which is based on this http://kalshagar.wikispaces.com/Arduino+and+a+YMZ294)
 // and code for generating a 2 MHz clock signal found here:
 // http://forum.arduino.cc/index.php/topic,62964.0.html
+
+const int BAUD_RATE = 9600;
 
 ////Pin connected to Data in (DS) of 74HC595
 const int dataPin = 5;
@@ -51,10 +54,127 @@ int tp[] = {//MIDI note number
   0//off
 };
 
+SerialCommand sc;
 
+void reset()
+{
+    Serial.print("Resetting chip...");
+    digitalWrite(resetPin, LOW);
+    delayMicroseconds(5);
+    digitalWrite(resetPin, HIGH);
+    Serial.println(" Success");
+}
+
+void set_amplitude()
+{
+    Serial.println("Setting amplitude...");
+    // Get channel, amplitude and envelope state from Serial
+    int channel;
+    int amplitude;
+    boolean useEnvelope;
+    char *arg;
+    arg = sc.next();
+    if (arg != NULL)
+    {
+        channel = atoi(arg);
+    }
+    else
+    {
+        Serial.println("Error");
+        return;
+    }
+    arg = sc.next();
+    if (arg != NULL)
+    {
+        amplitude = atoi(arg);
+    }
+    else
+    {
+        Serial.println("Error");
+    }
+    // Write data to chip
+    if (channel == 1) // Channel A
+    {
+        set_chA_amplitude(amplitude, false);
+    }
+    else if (channel == 2) // Channel B
+    {
+        set_chB_amplitude(amplitude, false);
+    }
+    else if (channel == 3) // Channel C
+    {
+        set_chC_amplitude(amplitude, false);
+    }
+    else
+    {
+        Serial.println("Error");
+        return;
+    }
+    Serial.println("Success");
+}
+
+void set_note()
+{
+    // Get channel and note from Serial
+    Serial.print("Setting tone...");
+    int channel;
+    int note_num;
+    char *arg;
+    arg = sc.next();
+    if (arg != NULL)
+    {
+        channel = atoi(arg);
+    }
+    else
+    {
+        Serial.println("Error");
+        return;
+    }
+    arg = sc.next();
+    if (arg != NULL)
+    {
+        note_num = atoi(arg);
+    }
+    else
+    {
+        Serial.println("Error");
+        return;
+    }
+    // Write data to chip
+    if (channel == 1) // Channel A
+    {
+        note_chA(note_num);
+    }
+    else if (channel == 2) // Channel B
+    {
+        note_chB(note_num);
+    }
+    else if (channel == 3) // Channel C
+    {
+        note_chC(note_num);
+    }
+    else
+    {
+        Serial.println("Error");
+        return;
+    }
+    Serial.println(" Success");
+}
+
+void defaultResponse()
+{
+    Serial.println("Error: invalid command.");
+}
 
 void setup()
 {
+    // Serial and commands
+    Serial.begin(BAUD_RATE);
+    sc.addCommand("RESET", reset);
+    sc.addCommand("AMP", set_amplitude);
+    sc.addCommand("NOTE", set_note);
+    sc.addDefaultHandler(defaultResponse);
+    
     //init pins
     //pinMode(latchPin, OUTPUT);
     //pinMode(dataPin, OUTPUT);  
@@ -62,12 +182,8 @@ void setup()
     pinMode(pinBC1, OUTPUT);
     pinMode(pinBCDIR, OUTPUT);        
     //pinMode(freqOutputPin, OUTPUT);
-
-    // Reset chip
-    //pinMode(resetPin, OUTPUT);
-    //digitalWrite(resetPin, LOW);
-    //delayMicroseconds(5);
-    //digitalWrite(resetPin, HIGH);
+    pinMode(resetPin, OUTPUT);
+    digitalWrite(resetPin, HIGH);
 
     // Port A output
     pinMode(22, OUTPUT);
@@ -82,15 +198,14 @@ void setup()
     //init2MhzClock();
     set_mix( true, true, true, false, false, false );
     //set_mix( false, false, false, false, false, false );
-    set_chA_amplitude(8,false);
-    set_chB_amplitude(8,false);
-    set_chC_amplitude(0,true);
 
-    note_chB(66);
+    Serial.println("Setup complete");
 }
 
 
 void loop() {
+  sc.readSerial();
+  /*
   set_envelope(false,false,false,false,0);
   if ( random(0,6) == 0 )
   {
@@ -100,7 +215,6 @@ void loop() {
   {
      set_chA_amplitude(0,false);
   }
-  /*
   if ( random(0,6) == 0 )
   {
     set_chB_amplitude(8,false);
@@ -108,7 +222,6 @@ void loop() {
   } else if ( random(0,4) == 0 )
   {
      set_chB_amplitude(0,false);
-  */
   if ( random(0,2) == 0 )
   {
     set_chC_amplitude(0,true);
@@ -117,8 +230,7 @@ void loop() {
   {
     set_chC_amplitude(0,false);
   }
- 
-  delay(20);
+  */
 }
 
 
