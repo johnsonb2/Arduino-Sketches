@@ -35,7 +35,7 @@ const float period    = 2.0 * prescale * (ocr2aval+1) / (F_CPU/1.0e6);
 const float freq      = 1.0e6 / period;
 
 int tp[] = {//MIDI note number
-  15289, 14431, 13621, 12856, 12135, 11454, 10811, 10204,//0-o7
+  15289, 14431, 13621, 12856, 12135, 11454, 10811, 10204,//0-7
   9631, 9091, 8581, 8099, 7645, 7215, 6810, 6428,//8-15
   6067, 5727, 5405, 5102, 4816, 4545, 4290, 4050,//16-23
   3822, 3608, 3405, 3214, 3034, 2863, 2703, 2551,//24-31
@@ -113,12 +113,12 @@ void set_amplitude()
     Serial.println("Success");
 }
 
-void set_note()
+void set_pitch()
 {
-    // Get channel and note from Serial
-    Serial.print("Setting tone...");
+    // Get channel and pitch from Serial
+    Serial.print("Setting pitch...");
     int channel;
-    int note_num;
+    int pitch;
     char *arg;
     arg = sc.next();
     if (arg != NULL)
@@ -133,7 +133,7 @@ void set_note()
     arg = sc.next();
     if (arg != NULL)
     {
-        note_num = atoi(arg);
+        pitch = atoi(arg);
     }
     else
     {
@@ -143,15 +143,15 @@ void set_note()
     // Write data to chip
     if (channel == 1) // Channel A
     {
-        note_chA(note_num);
+        pitch_chA(pitch);
     }
     else if (channel == 2) // Channel B
     {
-        note_chB(note_num);
+        pitch_chB(pitch);
     }
     else if (channel == 3) // Channel C
     {
-        note_chC(note_num);
+        pitch_chC(pitch);
     }
     else
     {
@@ -159,6 +159,21 @@ void set_note()
         return;
     }
     Serial.println(" Success");
+}
+
+void volume_slide() {
+  for (int i = 15; i >= 0; --i) {
+    set_chA_amplitude(i, false);
+    set_chB_amplitude(i, false);
+    set_chC_amplitude(i, false);
+    delay(60);
+  }
+}
+
+void piano_note()
+{
+    set_pitch();
+    volume_slide();
 }
 
 void defaultResponse()
@@ -172,7 +187,8 @@ void setup()
     Serial.begin(BAUD_RATE);
     sc.addCommand("RESET", reset);
     sc.addCommand("AMP", set_amplitude);
-    sc.addCommand("NOTE", set_note);
+    sc.addCommand("PITCH", set_pitch);
+    sc.addCommand("PIANO", piano_note);
     sc.addDefaultHandler(defaultResponse);
     
     //init pins
@@ -201,39 +217,6 @@ void setup()
 
     Serial.println("Setup complete");
 }
-
-
-void loop() {
-  sc.readSerial();
-  /*
-  set_envelope(false,false,false,false,0);
-  if ( random(0,6) == 0 )
-  {
-    set_chA_amplitude(8,false);
-    note_chA(random(50,66));
-  } else if ( random(0,4) == 0 )
-  {
-     set_chA_amplitude(0,false);
-  }
-  if ( random(0,6) == 0 )
-  {
-    set_chB_amplitude(8,false);
-    note_chB(random(50,66));
-  } else if ( random(0,4) == 0 )
-  {
-     set_chB_amplitude(0,false);
-  if ( random(0,2) == 0 )
-  {
-    set_chC_amplitude(0,true);
-    noise( random(0,0x20) );
-  } else  
-  {
-    set_chC_amplitude(0,false);
-  }
-  */
-}
-
-
 
 void  init2MhzClock()
 {
@@ -298,22 +281,79 @@ void set_envelope( boolean hold, boolean alternate, boolean attack, boolean cont
     
 }
 
-void note_chA(int i)
+void piano_chA(int i, int amp, int length_ms, bool slide)
 {
-  write_data(0x00, tp[i]&0xff);
-  write_data(0x01, (tp[i] >> 8)&0x0f);    
+  set_chA_amplitude(amp, false);
+  write_data(0x00, i & 0xff);
+  write_data(0x01, (i >> 8) & 0x0f);
+  if (slide) {
+    int slide_delay = length_ms / 50;
+    for (int i = 0; i < slide_delay; ++i) {
+      set_chA_amplitude(--amp, false);
+      delay(50);
+    }
+    delay(length_ms % 50);
+  }
+  else {
+    delay(length_ms);
+  }
+  set_chA_amplitude(0, false);  
 }
 
-void note_chB(int i)
+void piano_chB(int i, int amp, int length_ms, bool slide)
 {
-  write_data(0x02, tp[i]&0xff);
-  write_data(0x03, (tp[i] >> 8)&0x0f);
+  set_chB_amplitude(amp, false);
+  write_data(0x02, i & 0xff);
+  write_data(0x03, (i >> 8) & 0x0f);
+  if (slide) {
+    int slide_delay = length_ms / 50;
+    for (int i = 0; i < slide_delay; ++i) {
+      set_chB_amplitude(--amp, false);
+      delay(50);
+    }
+    delay(length_ms % 50);
+  }
+  else {
+    delay(length_ms);
+  }
+  set_chB_amplitude(0, false);
 }
 
-void note_chC(int i)
+void piano_chC(int i, int amp, int length_ms, bool slide)
 {
-  write_data(0x04, tp[i]&0xff);
-  write_data(0x05, (tp[i] >> 8)&0x0f);
+  set_chC_amplitude(amp, false);
+  write_data(0x04, i & 0xff);
+  write_data(0x05, (i >> 8) & 0x0f);
+  if (slide) {
+    int slide_delay = length_ms / 50;
+    for (int i = 0; i < slide_delay; ++i) {
+      set_chC_amplitude(--amp, false);
+      delay(50);
+    }
+    delay(length_ms % 50);
+  }
+  else {
+    delay(length_ms);
+  }
+  set_chC_amplitude(0, false);
+}
+
+void pitch_chA(int i)
+{
+  write_data(0x00, i & 0xff);
+  write_data(0x01, (i >> 8) & 0x0f);    
+}
+
+void pitch_chB(int i)
+{
+  write_data(0x02, i & 0xff);
+  write_data(0x03, (i >> 8)&0x0f);
+}
+
+void pitch_chC(int i)
+{
+  write_data(0x04, i & 0xff);
+  write_data(0x05, (i >> 8) & 0x0f);
 }
 
 void noise(int i)
@@ -362,4 +402,255 @@ void write_data(unsigned char address, unsigned char data)
   digitalWrite(latchPin, HIGH);
 
   mode_inactive();  
+}
+
+int notePitches[] = {
+  4050, // o0
+  3822, 3608, 3405, 3214, 3034, 2863, 2703, 2551, 2408, 2273, 2145, 2025, // o1
+  1911, 1804, 1703, 1607, 1517, 1432, 1351, 1276, 1204, 1136, 1073, 1012, // o2
+  956, 902, 851, 804, 758, 716, 676, 638, 602, 568, 536, 506, // o3
+  478, 451, 426, 402, 379, 358, 338, 319, 301, 284, 268, 253, // o4
+  239, 225, 213, 201, 190, 179, 169, 159, 150, 142, 134, 127, // o5
+  119, 113, 106, 100, 95, 89, 84, 80, 75, 71, 67, 63, // o6
+  60, 56, 53, 50, 47, 45, 42, 40, 38, 36, 34, 32, // o7
+  30 // o8
+};
+
+void neat_sequence() {
+  set_chA_amplitude(0, false);
+  set_chB_amplitude(0, false);
+  set_chC_amplitude(0, false);
+  int channel = 1;
+  int chA_amp, chB_amp, chC_amp = 0;
+  int sequence[] = {
+    213, 179, 142,
+    213, 179, 142,
+    159, 134, 106,
+    159, 134, 106,
+    239, 190, 159,
+    239, 190, 159,
+    179, 142, 119,
+    179, 142, 119,
+    268, 213, 179,
+    268, 213, 179,
+    319, 253, 213,
+    319, 253, 213,
+    284, 213, 190,
+    284, 213, 190,
+    284, 225, 190,
+    284, 225, 190,
+
+    213, 179, 142,
+    213, 179, 142,
+    159, 134, 106,
+    159, 134, 106,
+    239, 190, 159,
+    239, 190, 159,
+    179, 142, 119,
+    179, 142, 119,
+    268, 213, 179,
+    268, 213, 179,
+    319, 253, 213,
+    319, 253, 213,
+    758, 602, 506,
+    379, 301, 253,
+    568, 451, 379,
+    284, 225, 190,
+  };
+  for (int i = 0; i < 96 ; ++i) {
+    switch (channel) {
+      case 1:
+        pitch_chA(sequence[i]);
+        set_chA_amplitude(15, false);
+        chA_amp = 15;
+        break;
+      case 2:
+        pitch_chB(sequence[i]);
+        set_chB_amplitude(15, false);
+        chB_amp = 15;
+        break;
+      case 3:
+        pitch_chC(sequence[i]);
+        set_chC_amplitude(15, false);
+        chC_amp = 15;
+        break;
+    }
+    channel++;
+    if (channel == 4)
+      channel = 1;
+    // Decay note volumes
+    for (int j = 0; j < 4; j++) {
+      if (chA_amp > 0)
+        set_chA_amplitude(--chA_amp, false);
+      if (chB_amp > 0)
+        set_chB_amplitude(--chB_amp, false);
+      if (chC_amp > 0)
+        set_chC_amplitude(--chC_amp, false);
+      delay(30);
+    }
+  }
+}
+
+// Play Jingle Bells on Channel A
+void playJingleBells() {
+  piano_chA(379, 15, 126, true);
+  delay(126);
+  piano_chA(379, 15, 126, true);
+  delay(126);
+  piano_chA(379, 15, 378, true);
+  delay(126);
+  piano_chA(379, 15, 126, true);
+  delay(126);
+  piano_chA(379, 15, 126, true);
+  delay(126);
+  piano_chA(379, 15, 378, true);
+  delay(126);
+  piano_chA(379, 15, 126, true);
+  delay(126);
+  piano_chA(319, 15, 126, true);
+  delay(126);
+  piano_chA(478, 15, 252, true);
+  delay(126);
+  piano_chA(426, 15, 63, true);
+  delay(63);
+  piano_chA(379, 15, 504, true);
+  delay(504);
+
+  piano_chA(358, 15, 126, true);
+  delay(126);
+  piano_chA(358, 15, 126, true);
+  delay(126);
+  piano_chA(358, 15, 252, true);
+  delay(126);
+  piano_chA(358, 15, 63, true);
+  delay(63);
+  piano_chA(358, 15, 126, true);
+  delay(126);
+  piano_chA(379, 15, 126, true);
+  delay(126);
+  piano_chA(379, 15, 126, true);
+  delay(126);
+  piano_chA(379, 15, 63, true);
+  delay(63);
+  piano_chA(379, 15, 63, true);
+  delay(63);
+  piano_chA(319, 15, 126, true);
+  delay(126);
+  piano_chA(319, 15, 126, true);
+  delay(126);
+  piano_chA(358, 15, 126, true);
+  delay(126);
+  piano_chA(426, 15, 126, true);
+  delay(126);
+  piano_chA(478, 15, 504, true);
+  delay(504);
+}
+
+void playChords() {
+  pitch_chA(239);
+  pitch_chB(190);
+  pitch_chC(159);
+  volume_slide();
+  pitch_chA(239);
+  pitch_chB(179);
+  pitch_chC(142);
+  volume_slide();
+  pitch_chA(239);
+  pitch_chB(190);
+  pitch_chC(159);
+  volume_slide();
+  pitch_chA(253);
+  pitch_chB(179);
+  pitch_chC(159);
+  volume_slide();
+  pitch_chA(239);
+  pitch_chB(190);
+  pitch_chC(159);
+  volume_slide();
+  delay(1000);
+}
+
+void note_slide() {
+  set_chA_amplitude(0, false);
+  set_chB_amplitude(0, false);
+  set_chC_amplitude(0, false);
+  int channel = 1;
+  int chA_amp, chB_amp, chC_amp = 0;
+  for (int i = 60; i >= 13; --i) {
+    switch (channel) {
+      case 1:
+        pitch_chA(notePitches[i]);
+        set_chA_amplitude(15, false);
+        chA_amp = 15;
+        break;
+      case 2:
+        pitch_chB(notePitches[i]);
+        set_chB_amplitude(15, false);
+        chB_amp = 15;
+        break;
+      case 3:
+        pitch_chC(notePitches[i]);
+        set_chC_amplitude(15, false);
+        chC_amp = 15;
+        break;
+    }
+    channel++;
+    if (channel == 4)
+      channel = 1;
+    // Decay note volumes
+    for (int j = 0; j < 4; j++) {
+      if (chA_amp > 0)
+        set_chA_amplitude(--chA_amp, false);
+      if (chB_amp > 0)
+        set_chB_amplitude(--chB_amp, false);
+      if (chC_amp > 0)
+        set_chC_amplitude(--chC_amp, false);
+      delay(30);
+    }
+  }
+}
+
+void loop() {
+  //sc.readSerial();
+  playJingleBells();
+  playChords();
+  note_slide();
+  neat_sequence();
+  set_chA_amplitude(0, false);
+  set_chB_amplitude(0, false);
+  set_chC_amplitude(0, false);
+  delay(1000);
+  /*
+  set_chA_amplitude(15, false);
+  for (int i = 25; i < 37; ++i) {
+    pitch_chA(notePitches[i]);
+    delay(250);
+  }
+  */
+  /*
+  set_envelope(false,false,false,false,0);
+  if ( random(0,6) == 0 )
+  {
+    set_chA_amplitude(8,false);
+    piano_chA(random(50,66));
+  } else if ( random(0,4) == 0 )
+  {
+     set_chA_amplitude(0,false);
+  }
+  if ( random(0,6) == 0 )
+  {
+    set_chB_amplitude(8,false);
+    note_chB(random(50,66));
+  } else if ( random(0,4) == 0 )
+  {
+     set_chB_amplitude(0,false);
+  if ( random(0,2) == 0 )
+  {
+    set_chC_amplitude(0,true);
+    noise( random(0,0x20) );
+  } else  
+  {
+    set_chC_amplitude(0,false);
+  }
+  */
 }
