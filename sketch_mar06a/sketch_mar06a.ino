@@ -1,6 +1,6 @@
 #include "pitches.h"
 
-#define AUDIO_PIN 13
+#define AUDIO_PIN 3
 #define BAUD_RATE 4800
 
 String sequence = "";
@@ -12,14 +12,12 @@ int octave = defOctave;
 void setup() {
   // put your setup code here, to run once:
   Serial.begin(BAUD_RATE);
+  pinMode(AUDIO_PIN, OUTPUT);
   Serial.println("Setup complete. Awaiting sequences.");
 }
 
 void loop() {
   // put your main code here, to run repeatedly:
-
-    // TODO: convert to vector instead of array
-    
   if(Serial.available() > 0) {
     // read next sequence
     sequence = Serial.readString();
@@ -42,15 +40,11 @@ void loop() {
     int count = 0;
     // keep track of beginning of input string
     int startInputPointer = 0;
-    Serial.println("Starting check...");
     for(int i = 0; i < sequence.length();) {
       // check for command
-      Serial.println("Checking if command...");
       if(isCommand(sequence[i])) {
-        Serial.println("is command...");
         // check if command is two characters
-        if(isNote(sequence[i]) && hasSharp(sequence[i])) {
-          Serial.println("can have a sharp version of this note...");
+        if(isNote(sequence[i]) && canHaveSharp(sequence[i])) {
           if(sequence[i+1] == '+') {
             commands[count] = sequence.substring(i, i+2);
             i++;
@@ -58,23 +52,19 @@ void loop() {
           // does not have two character command
           else {
             commands[count] = sequence[i];
-            Serial.println("there is no sharp version of this command...");
           }
         }
         else {
           // not a note
           commands[count] = sequence[i];
-          Serial.println("this is not a note...");
         }
         i++;
         // figure out corresponding input for command
-        Serial.println("checking for command...");
         startInputPointer = i;
         while(!isCommand(sequence[i]) && i < sequence.length()) {
           i++; 
         }
         inputs[count] = sequence.substring(startInputPointer, i);
-        Serial.println(commands[count] + inputs[count]);
         count++;
       }
       // invalid input, skip
@@ -84,23 +74,24 @@ void loop() {
     // execute commands
     for(int i = 0; i < sizeof(commands)/sizeof(String); i++) {
       if(isNote(commands[i][0])) {
-        Serial.println("Note: " + commands[i] + inputs[i]);
+        note(commands[i], inputs[i]);
       }
       else if(commands[i][0] == 'r') {
-        Serial.println("rest: " + commands[i] + inputs[i]);
+        rest(inputs[i]);
       }
       else if(commands[i][0] == 't') {
-        Serial.println("tempo: " + commands[i] + inputs[i]);
+        setTempo(convertToInt(inputs[i]));
       }
       else if(commands[i][0] == 'o') {
-        Serial.println("absOctaveChange: " + commands[i] + inputs[i]);
+        absOctaveChange(convertToInt(inputs[i]));
       }
       else if(commands[i][0] == '>' || commands[i][0] == '<') {
-        Serial.println("relOctaveChange: " + commands[i] + inputs[i]);
+        relOctaveChange(commands[i]);
       }
-      else Serial.println("invalid input: " + commands[i] + inputs[i]);
     }
     Serial.println("Pass complete");
+    tempo = defTempo;
+    octave = defOctave;
   }
 }
 
@@ -114,31 +105,24 @@ bool isNote(char input) {
   
 }
 
-// Checks to see if the note has a sharp note
-bool hasSharp(char input) {
-  if(input == 'c' || input == 'd' || input == 'f' || input == 'g' ||
-      input == 'a') {
-          return true;
-  }
-  else return false;
-  
+// Checks to see if the note can be sharp
+bool canHaveSharp(char input) {
+  return input == 'c' || input == 'd' || input == 'f' || input == 'g' || input == 'a';
 }
 
 bool isCommand(char input) {
-  if(input == 'c' || input == 'd' || input == 'e' || input == 'f' ||
-      input == 'g' || input == 'a' || input == 'b' || input == 'r' || 
-      input == 't' || input == 'o' || input == '<' || input == '>') {
-          return true;
-  }
-  else return false;
+  return input == 'c' || input == 'd' || input == 'e' || input == 'f' ||
+         input == 'g' || input == 'a' || input == 'b' || input == 'r' || 
+         input == 't' || input == 'o' || input == '<' || input == '>';
 }
 
-int convertToInt(char input[]) {
+// find a function that can do this for you
+int convertToInt(String input) {
   int retVal = 0;
-  int inputSize = sizeof input / sizeof input[0];
-  for(int i = 0; i < inputSize; i++) {
-    int temp = ((int)input[i] - 30);
-    for(int j = inputSize - 1; j > i; j--) {
+  for(int i = 0; i < input.length(); i++) {
+    int place = input.length();
+    int temp = (input[i] - 48);
+    for(int j = 0; j < place - i - 1; j++) {
       temp *= 10;
     }
     retVal += temp;
@@ -146,3 +130,238 @@ int convertToInt(char input[]) {
   return retVal;
 }
 
+// plays a note at the specified length
+void note(String note, String seq) {
+  String lengths[seq.length()]; 
+  float totalTime = 0; 
+  for(int i, start, count = 0; i < seq.length(); i++) {
+    if(i + 1 >= seq.length()) {
+      lengths[count++] = seq.substring(start, seq.length());
+    }
+    else if(seq[i] == '&') {
+      lengths[count++] = seq.substring(start, i);
+      start = i + 1;
+    }
+  }
+  for(int i = 0; i < sizeof(lengths) / sizeof(String); i++) {
+    Serial.println(lengths[i]);
+  }
+  for(int i = 0; i < sizeof(lengths) / sizeof(String); i++) {
+    int temp = convertToInt(lengths[i]);
+    if(temp == 1) {
+      totalTime += 1.0f;
+    }
+    else if (temp == 2) {
+      totalTime += 0.5f;
+    }
+    else if (temp == 4) {
+      totalTime += 0.25f;
+    }
+    else if (temp == 8) {
+      totalTime += 0.125f;
+    }
+    else if (temp == 16) {
+      totalTime += 0.0625f;
+    }
+    else if (temp == 32) {
+      totalTime += 0.03125f;
+    }
+  }
+  float duration = (totalTime / (tempo / 60)) * 10000;
+  Serial.println(duration);
+  if(note == "c") {
+    if(octave == 1) tone(AUDIO_PIN, NOTE_C1, (unsigned long)duration);
+    else if (octave == 2) tone(AUDIO_PIN, NOTE_C2, (unsigned long)duration);
+    else if (octave == 3) tone(AUDIO_PIN, NOTE_C3, (unsigned long)duration);
+    else if (octave == 4) tone(AUDIO_PIN, NOTE_C4, (unsigned long)duration);
+    else if (octave == 5) tone(AUDIO_PIN, NOTE_C5, (unsigned long)duration);
+    else if (octave == 6) tone(AUDIO_PIN, NOTE_C6, (unsigned long)duration);
+    else if (octave == 7) tone(AUDIO_PIN, NOTE_C7, (unsigned long)duration);
+    else if (octave == 8) tone(AUDIO_PIN, NOTE_C8, (unsigned long)duration);
+    delay(duration);
+  } 
+  else if (note == "c+") {
+    if(octave == 1) tone(AUDIO_PIN, NOTE_CS1, (unsigned long)duration);
+    else if (octave == 2) tone(AUDIO_PIN, NOTE_CS2, (unsigned long)duration);
+    else if (octave == 3) tone(AUDIO_PIN, NOTE_CS3, (unsigned long)duration);
+    else if (octave == 4) tone(AUDIO_PIN, NOTE_CS4, (unsigned long)duration);
+    else if (octave == 5) tone(AUDIO_PIN, NOTE_CS5, (unsigned long)duration);
+    else if (octave == 6) tone(AUDIO_PIN, NOTE_CS6, (unsigned long)duration);
+    else if (octave == 7) tone(AUDIO_PIN, NOTE_CS7, (unsigned long)duration);
+    else if (octave == 8) tone(AUDIO_PIN, NOTE_CS8, (unsigned long)duration);
+    delay(duration);
+  }
+  else if (note == "d") {    
+    if(octave == 1) tone(AUDIO_PIN, NOTE_D1, (unsigned long)duration);
+    else if (octave == 2) tone(AUDIO_PIN, NOTE_D2, (unsigned long)duration);
+    else if (octave == 3) tone(AUDIO_PIN, NOTE_D3, (unsigned long)duration);
+    else if (octave == 4) tone(AUDIO_PIN, NOTE_D4, (unsigned long)duration);
+    else if (octave == 5) tone(AUDIO_PIN, NOTE_D5, (unsigned long)duration);
+    else if (octave == 6) tone(AUDIO_PIN, NOTE_D6, (unsigned long)duration);
+    else if (octave == 7) tone(AUDIO_PIN, NOTE_D7, (unsigned long)duration);
+    else if (octave == 8) tone(AUDIO_PIN, NOTE_D8, (unsigned long)duration);
+    delay(duration);
+  }
+  else if (note == "d+") {
+    if(octave == 1) tone(AUDIO_PIN, NOTE_DS1, (unsigned long)duration);
+    else if (octave == 2) tone(AUDIO_PIN, NOTE_DS2, (unsigned long)duration);
+    else if (octave == 3) tone(AUDIO_PIN, NOTE_DS3, (unsigned long)duration);
+    else if (octave == 4) tone(AUDIO_PIN, NOTE_DS4, (unsigned long)duration);
+    else if (octave == 5) tone(AUDIO_PIN, NOTE_DS5, (unsigned long)duration);
+    else if (octave == 6) tone(AUDIO_PIN, NOTE_DS6, (unsigned long)duration);
+    else if (octave == 7) tone(AUDIO_PIN, NOTE_DS7, (unsigned long)duration);
+    else if (octave == 8) tone(AUDIO_PIN, NOTE_DS8, (unsigned long)duration);
+    delay(duration);
+  }
+  else if (note == "e") {    
+    if(octave == 1) tone(AUDIO_PIN, NOTE_E1, (unsigned long)duration);
+    else if (octave == 2) tone(AUDIO_PIN, NOTE_E2, (unsigned long)duration);
+    else if (octave == 3) tone(AUDIO_PIN, NOTE_E3, (unsigned long)duration);
+    else if (octave == 4) tone(AUDIO_PIN, NOTE_E4, (unsigned long)duration);
+    else if (octave == 5) tone(AUDIO_PIN, NOTE_E5, (unsigned long)duration);
+    else if (octave == 6) tone(AUDIO_PIN, NOTE_E6, (unsigned long)duration);
+    else if (octave == 7) tone(AUDIO_PIN, NOTE_E7, (unsigned long)duration);
+    delay(duration);
+  } 
+  else if (note == "f") {
+    if(octave == 1) tone(AUDIO_PIN, NOTE_F1, (unsigned long)duration);
+    else if (octave == 2) tone(AUDIO_PIN, NOTE_F2, (unsigned long)duration);
+    else if (octave == 3) tone(AUDIO_PIN, NOTE_F3, (unsigned long)duration);
+    else if (octave == 4) tone(AUDIO_PIN, NOTE_F4, (unsigned long)duration);
+    else if (octave == 5) tone(AUDIO_PIN, NOTE_F5, (unsigned long)duration);
+    else if (octave == 6) tone(AUDIO_PIN, NOTE_F6, (unsigned long)duration);
+    else if (octave == 7) tone(AUDIO_PIN, NOTE_F7, (unsigned long)duration);
+    delay(duration);
+  } 
+  else if (note == "f+") {
+    if(octave == 1) tone(AUDIO_PIN, NOTE_FS1, (unsigned long)duration);
+    else if (octave == 2) tone(AUDIO_PIN, NOTE_FS2, (unsigned long)duration);
+    else if (octave == 3) tone(AUDIO_PIN, NOTE_FS3, (unsigned long)duration);
+    else if (octave == 4) tone(AUDIO_PIN, NOTE_FS4, (unsigned long)duration);
+    else if (octave == 5) tone(AUDIO_PIN, NOTE_FS5, (unsigned long)duration);
+    else if (octave == 6) tone(AUDIO_PIN, NOTE_FS6, (unsigned long)duration);
+    else if (octave == 7) tone(AUDIO_PIN, NOTE_FS7, (unsigned long)duration);
+    delay(duration);
+  } 
+  else if (note == "g") {
+    if(octave == 1) tone(AUDIO_PIN, NOTE_G1, (unsigned long)duration);
+    else if (octave == 2) tone(AUDIO_PIN, NOTE_G2, (unsigned long)duration);
+    else if (octave == 3) tone(AUDIO_PIN, NOTE_G3, (unsigned long)duration);
+    else if (octave == 4) tone(AUDIO_PIN, NOTE_G4, (unsigned long)duration);
+    else if (octave == 5) tone(AUDIO_PIN, NOTE_G5, (unsigned long)duration);
+    else if (octave == 6) tone(AUDIO_PIN, NOTE_G6, (unsigned long)duration);
+    else if (octave == 7) tone(AUDIO_PIN, NOTE_G7, (unsigned long)duration);
+    delay(duration);
+  }
+  else if (note == "g+") {
+    if(octave == 1) tone(AUDIO_PIN, NOTE_GS1, (unsigned long)duration);
+    else if (octave == 2) tone(AUDIO_PIN, NOTE_GS2, (unsigned long)duration);
+    else if (octave == 3) tone(AUDIO_PIN, NOTE_GS3, (unsigned long)duration);
+    else if (octave == 4) tone(AUDIO_PIN, NOTE_GS4, (unsigned long)duration);
+    else if (octave == 5) tone(AUDIO_PIN, NOTE_GS5, (unsigned long)duration);
+    else if (octave == 6) tone(AUDIO_PIN, NOTE_GS6, (unsigned long)duration);
+    else if (octave == 7) tone(AUDIO_PIN, NOTE_GS7, (unsigned long)duration);
+    delay(duration);
+  } 
+  else if(note == "a") {
+    if(octave == 1) tone(AUDIO_PIN, NOTE_A1, (unsigned long)duration);
+    else if (octave == 2) tone(AUDIO_PIN, NOTE_A2, (unsigned long)duration);
+    else if (octave == 3) tone(AUDIO_PIN, NOTE_A3, (unsigned long)duration);
+    else if (octave == 4) tone(AUDIO_PIN, NOTE_A4, (unsigned long)duration);
+    else if (octave == 5) tone(AUDIO_PIN, NOTE_A5, (unsigned long)duration);
+    else if (octave == 6) tone(AUDIO_PIN, NOTE_A6, (unsigned long)duration);
+    else if (octave == 7) tone(AUDIO_PIN, NOTE_A7, (unsigned long)duration);
+    delay(duration);
+  } 
+  else if(note == "a+") {
+    if(octave == 1) tone(AUDIO_PIN, NOTE_AS1, (unsigned long)duration);
+    else if (octave == 2) tone(AUDIO_PIN, NOTE_AS2, (unsigned long)duration);
+    else if (octave == 3) tone(AUDIO_PIN, NOTE_AS3, (unsigned long)duration);
+    else if (octave == 4) tone(AUDIO_PIN, NOTE_AS4, (unsigned long)duration);
+    else if (octave == 5) tone(AUDIO_PIN, NOTE_AS5, (unsigned long)duration);
+    else if (octave == 6) tone(AUDIO_PIN, NOTE_AS6, (unsigned long)duration);
+    else if (octave == 7) tone(AUDIO_PIN, NOTE_AS7, (unsigned long)duration);
+    delay(duration);
+  } 
+  else if (note == "b") {
+    if(octave == 1) tone(AUDIO_PIN, NOTE_B1, (unsigned long)duration);
+    else if (octave == 2) tone(AUDIO_PIN, NOTE_B2, (unsigned long)duration);
+    else if (octave == 3) tone(AUDIO_PIN, NOTE_B3, (unsigned long)duration);
+    else if (octave == 4) tone(AUDIO_PIN, NOTE_B4, (unsigned long)duration);
+    else if (octave == 5) tone(AUDIO_PIN, NOTE_B5, (unsigned long)duration);
+    else if (octave == 6) tone(AUDIO_PIN, NOTE_B6, (unsigned long)duration);
+    else if (octave == 7) tone(AUDIO_PIN, NOTE_B7, (unsigned long)duration);
+    delay(duration);
+  }
+}
+
+void rest(String seq) {
+  noTone(AUDIO_PIN);
+  String lengths[seq.length()]; 
+  float totalTime = 0;
+  for(int i, start, count = 0; i < seq.length(); i++) {
+    if(i + 1 >= seq.length()) {
+      lengths[count++] = seq.substring(start, seq.length());
+    }
+    else if(seq[i] == '&') {
+      lengths[count++] = seq.substring(start, i);
+      start = i + 1;
+    }
+  }
+  for(int i = 0; i < sizeof(lengths) / sizeof(String); i++) {
+    int temp = convertToInt(lengths[i]);
+    if(temp == 1) {
+      totalTime += 1.0f;
+    }
+    else if (temp == 2) {
+      totalTime += 0.5f;
+    }
+    else if (temp == 4) {
+      totalTime += 0.25f;
+    }
+    else if (temp == 8) {
+      totalTime += 0.125f;
+    }
+    else if (temp == 16) {
+      totalTime += 0.0625f;
+    }
+    else if (temp == 32) {
+      totalTime += 0.03125f;
+    }
+  }
+  float duration = (totalTime / (tempo / 60)) * 1000;
+  delay(duration);
+}
+
+void setTempo(int seq) {
+  if(seq > 250 || seq < 50) {
+     Serial.println("Invalid tempo command recieved.");
+     return;
+  } 
+  else tempo = seq;
+}
+
+void absOctaveChange(int seq) {
+  if(seq > 8 || seq < 1) {
+     Serial.println("Invalid absolute octave command recieved.");
+     return;
+  } 
+  else octave = seq;
+}
+
+void relOctaveChange(String seq) {
+  if(seq == ">") {
+    if(octave - 1 < 1) { 
+      Serial.println("Invalid relative octave command recieved.");
+      return; 
+      }
+    else octave--;
+  }
+  else if (seq == "<") {
+    if(octave + 1 > 8) { 
+      Serial.println("Invalid relative octave command recieved.");
+      return; 
+      }
+    else octave++;
+  }
+}
