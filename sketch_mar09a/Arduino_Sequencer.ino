@@ -1,14 +1,30 @@
+/*
+ *    Arduino_Sequencer.ino
+ *    Authors:      Blaise Johnson, Joshua Plantilla
+ *    Date:         March 9, 2018
+ *    Description:  Functions as a sequencer for an Arduino chip.
+ *                  Input commands are handled over the serial monitor.
+ *                  The audio output pin is 3, but it is adjustable.
+ *                  Default tempo is 140, octave is 4. Resets every pass.
+ */
+
 #include "pitches.h"
 
 #define AUDIO_PIN 3
 #define BAUD_RATE 4800
 
+// The serial monitor input
 String sequence = "";
+
+// constant variables
 const int defTempo = 140;
 const int defOctave = 4;
+
+// adjustable variables
 int tempo = defTempo;
 int octave = defOctave;
 
+// initialization
 void setup() {
   // put your setup code here, to run once:
   Serial.begin(BAUD_RATE);
@@ -16,6 +32,7 @@ void setup() {
   Serial.println("Setup complete. Awaiting sequences.");
 }
 
+// loop
 void loop() {
   // put your main code here, to run repeatedly:
   if(Serial.available() > 0) {
@@ -123,7 +140,9 @@ int convertToInt(String input) {
   int retVal = 0;
   for(int i = 0; i < input.length(); i++) {
     int place = input.length();
+    // this converts to int
     int temp = (input[i] - 48);
+    // multiply by place value
     for(int j = 0; j < place - i - 1; j++) {
       temp *= 10;
     }
@@ -158,6 +177,7 @@ void note(String note, String seq) {
     uint32_t eighth_ms = quarter_ms / 2;
     uint32_t sixteenth_ms = eighth_ms / 2;
     uint32_t thirtysecondth_ms = sixteenth_ms / 2;
+    // add note lengths to total duration
     if(temp == 1) {
       duration_ms += whole_ms;
     }
@@ -177,6 +197,7 @@ void note(String note, String seq) {
       duration_ms += thirtysecondth_ms;
     }
   }
+  // plays note according to octave
   if(note == "c") {
     if(octave == 1) tone(AUDIO_PIN, NOTE_C1, duration_ms);
     else if (octave == 2) tone(AUDIO_PIN, NOTE_C2, duration_ms);
@@ -305,14 +326,19 @@ void note(String note, String seq) {
 
 // rests for the specified duration
 void rest(String seq) {
+  // end current tone
   noTone(AUDIO_PIN);
+  // store lengths
   String lengths[seq.length()]; 
+  // store total duration
   uint32_t duration_ms = 0;
+  // split lengths into an array
   for(int i, start, count = 0; i < seq.length(); i++) {
     if(i + 1 >= seq.length()) {
+      // last length
       lengths[count++] = seq.substring(start, seq.length());
     }
-    else if(seq[i] == '&') {
+    else if(seq[i] == '&') { // length is split by this delimiter
       lengths[count++] = seq.substring(start, i);
       start = i + 1;
     }
@@ -326,6 +352,7 @@ void rest(String seq) {
     uint32_t eighth_ms = quarter_ms / 2;
     uint32_t sixteenth_ms = eighth_ms / 2;
     uint32_t thirtysecondth_ms = sixteenth_ms / 2;
+    // add to total duration
     if(temp == 1) {
       duration_ms += whole_ms;
     }
